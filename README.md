@@ -12,7 +12,3 @@ The source is open so anyone can see what the bootstrapper does before running i
 1. Clone the repository.
 2. Run `dotnet build -c Release`.
 3. The exe is in `bin\Release`.
-
-## About
-
-Installs and updates the Echocore client, and launches games from the site.
