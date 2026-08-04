@@ -1,0 +1,56 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        shell: pwsh
+        run: |
+          $buildArgs = @('build', 'EchoBootstrapper.csproj', '-c', 'Release')
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $buildArgs += '-p:Version=' + ($env:GITHUB_REF -replace '^refs/tags/v', '')
+          }
+          dotnet @buildArgs
+
+      - name: Verify output
+        shell: pwsh
+        run: |
+          $exe = 'bin/Release/EchoBootstrapper.exe'
+          if (-not (Test-Path $exe)) { throw "no exe was produced" }
+          $info = (Get-Item $exe).VersionInfo
+          "$exe - $([int]((Get-Item $exe).Length / 1KB)) KB, version $($info.FileVersion)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EchoBootstrapper
+          path: bin/Release/EchoBootstrapper.exe
+          if-no-files-found: error
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$env:GITHUB_REF_NAME"
+          bin/Release/EchoBootstrapper.exe
+          --title "$env:GITHUB_REF_NAME"
+          --generate-notes
