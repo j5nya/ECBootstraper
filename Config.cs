@@ -12,7 +12,7 @@ namespace EchoBootstrapper
 
         public const string StudioUrl = "https://echocore.xyz/client/studio.zip";
 
-        public const string PlayerExecutable = "RobloxPlayerBeta.exe";
+        public const string PlayerExecutable = "EchoCorePlayerBt.exe";
 
         public const string StudioExecutable = "RobloxStudioBeta.exe";
 
