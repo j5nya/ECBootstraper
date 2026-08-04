@@ -120,21 +120,14 @@ namespace EchoBootstrapper
 
                 var manifest = await _installer.FetchManifestAsync(_cancel.Token).ConfigureAwait(true);
 
-                if (!Installer.IsClientCurrent(manifest.Version) || _wantStudio)
+                var options = new InstallOptions
                 {
-                    var options = new InstallOptions
-                    {
-                        Studio = _wantStudio,
-                        DesktopShortcut = true,
-                        RegisterProtocol = true,
-                    };
+                    Studio = _wantStudio,
+                    DesktopShortcut = true,
+                    RegisterProtocol = true,
+                };
 
-                    await _installer.InstallAsync(manifest, options, null, _cancel.Token).ConfigureAwait(true);
-                }
-                else
-                {
-                    Installer.RegisterProtocol();
-                }
+                await _installer.InstallAsync(manifest, options, null, _cancel.Token).ConfigureAwait(true);
 
                 if (_launchMode)
                     _installer.LaunchFromProtocol(_protocolArgument, null);

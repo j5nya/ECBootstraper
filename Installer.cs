@@ -88,16 +88,21 @@ namespace EchoBootstrapper
         {
             Directory.CreateDirectory(DownloadsDir);
 
-            if (!IsClientCurrent(manifest.Version))
-                await InstallClientAsync(manifest, progress, ct).ConfigureAwait(false);
+            var installed = false;
 
-            if (options.Studio)
-                await InstallStudioAsync(progress, ct).ConfigureAwait(false);
+            if (!IsClientCurrent(manifest.Version))
+            {
+                await InstallClientAsync(manifest, progress, ct).ConfigureAwait(false);
+                installed = true;
+            }
+
+            if (options.Studio || Directory.Exists(StudioDir))
+                installed |= await InstallStudioAsync(progress, ct).ConfigureAwait(false);
 
             progress?.Report(new Status("Finishing up...", 98));
 
             if (options.RegisterProtocol) RegisterProtocol();
-            if (options.DesktopShortcut) CreateDesktopShortcut(PlayerPath());
+            if (options.DesktopShortcut && installed) CreateDesktopShortcut(PlayerPath());
 
             RemoveLegacyLayout();
 
@@ -106,9 +111,6 @@ namespace EchoBootstrapper
 
         private async Task InstallClientAsync(Manifest manifest, IProgress<Status> progress, CancellationToken ct)
         {
-            var target = ClientDir;
-            ReplaceFolder(target);
-
             long totalBytes = manifest.Packages.Sum(p => p.Size);
             long doneBytes = 0;
             var gate = new object();
@@ -159,21 +161,32 @@ namespace EchoBootstrapper
                             }
                         }
 
-                        progress?.Report(new Status("Unpacking " + package.Name + "...", -1));
-                        ExtractInto(zipPath, target);
                     }
                 }, ct));
             }
 
             await Task.WhenAll(workers).ConfigureAwait(false);
 
-            File.WriteAllText(VersionFile(target), manifest.Version);
+            var staging = ClientDir + ".new";
+            ReplaceFolder(staging);
+
+            foreach (var package in manifest.Packages)
+            {
+                ct.ThrowIfCancellationRequested();
+                progress?.Report(new Status("Unpacking " + package.Name + "...", -1));
+                ExtractInto(Path.Combine(DownloadsDir, package.Sha256 + ".zip"), staging);
+            }
+
+            File.WriteAllText(VersionFile(staging), manifest.Version);
+
+            DeleteFolder(ClientDir);
+            Directory.Move(staging, ClientDir);
         }
 
-        private async Task InstallStudioAsync(IProgress<Status> progress, CancellationToken ct)
+        private async Task<bool> InstallStudioAsync(IProgress<Status> progress, CancellationToken ct)
         {
             var version = await RemoteVersionAsync(Config.StudioUrl, ct).ConfigureAwait(false);
-            if (InstalledVersion(StudioDir) == version && File.Exists(StudioPath())) return;
+            if (InstalledVersion(StudioDir) == version && File.Exists(StudioPath())) return false;
 
             progress?.Report(new Status("Downloading Studio...", 92));
             var zip = Path.Combine(DownloadsDir, "studio.zip");
@@ -185,18 +198,22 @@ namespace EchoBootstrapper
             File.WriteAllText(VersionFile(StudioDir), version);
 
             TryDelete(zip);
+            return true;
+        }
+
+        private static void DeleteFolder(string folder)
+        {
+            if (!Directory.Exists(folder)) return;
+            try { Directory.Delete(folder, true); }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                throw new Exception("Close " + Config.DisplayName + " first - its files are still open.");
+            }
         }
 
         private static void ReplaceFolder(string folder)
         {
-            if (Directory.Exists(folder))
-            {
-                try { Directory.Delete(folder, true); }
-                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
-                {
-                    throw new Exception("Close " + Config.DisplayName + " first - its files are still open.");
-                }
-            }
+            DeleteFolder(folder);
             Directory.CreateDirectory(folder);
         }
 
