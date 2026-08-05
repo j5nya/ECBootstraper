@@ -18,6 +18,10 @@ namespace EchoBootstrapper
 
         public const string ProtocolScheme = "echo-player";
 
+        public const string ReleasesApiUrl = "https://api.github.com/repos/j5nya/ECBootstraper/releases/latest";
+
+        public const string UpdateAssetName = "EchoBootstrapper.exe";
+
         public const int ParallelDownloads = 3;
     }
 }

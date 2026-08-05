@@ -15,6 +15,7 @@ namespace EchoBootstrapper
         private const int LogoSize = 96;
         private const int SideMargin = 52;
 
+        private readonly string[] _args;
         private readonly string _protocolArgument;
         private readonly bool _launchMode;
 
@@ -28,8 +29,9 @@ namespace EchoBootstrapper
 
         public bool Preview { get; set; }
 
-        public MainForm(string protocolArgument)
+        public MainForm(string[] args, string protocolArgument)
         {
+            _args = args ?? new string[0];
             _protocolArgument = protocolArgument;
             _launchMode = !string.IsNullOrEmpty(protocolArgument);
             BuildUi();
@@ -116,6 +118,20 @@ namespace EchoBootstrapper
                     return;
                 }
 
+                var progress = new Progress<Status>(step =>
+                {
+                    if (!string.IsNullOrEmpty(step.Text)) _status.Text = step.Text;
+                });
+
+                // Before anything else, in case a newer launcher is what fixes whatever
+                // the current one gets wrong. If it replaces itself it starts again with
+                // the same arguments, so this copy has nothing left to do.
+                if (await _installer.TryUpdateSelfAsync(_args, progress, _cancel.Token).ConfigureAwait(true))
+                {
+                    Close();
+                    return;
+                }
+
                 var manifest = await _installer.FetchManifestAsync(_cancel.Token).ConfigureAwait(true);
 
                 var options = new InstallOptions
@@ -123,11 +139,6 @@ namespace EchoBootstrapper
                     DesktopShortcut = true,
                     RegisterProtocol = true,
                 };
-
-                var progress = new Progress<Status>(step =>
-                {
-                    if (!string.IsNullOrEmpty(step.Text)) _status.Text = step.Text;
-                });
 
                 await _installer.InstallAsync(manifest, options, progress, _cancel.Token).ConfigureAwait(true);
 

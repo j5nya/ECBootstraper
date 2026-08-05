@@ -8,6 +8,7 @@ using System.Net;
 using System.Net.Http;
 using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -67,6 +68,162 @@ namespace EchoBootstrapper
 
         public static bool IsClientCurrent(string version) =>
             InstalledVersion(ClientDir) == version && File.Exists(PlayerPath());
+
+        private static string SelfPath() => Process.GetCurrentProcess().MainModule.FileName;
+
+        private static string AttemptedUpdateFile => Path.Combine(DownloadsDir, "selfupdate.txt");
+
+        private static Version CurrentVersion()
+        {
+            return Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0);
+        }
+
+        /// <summary>
+        /// Reads a release tag like "v1.0.4" as a version. Missing parts count as zero,
+        /// so 1.0.4 and 1.0.4.0 compare equal instead of the shorter one losing.
+        /// </summary>
+        internal static Version ParseVersion(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+
+            var match = Regex.Match(text.Trim().TrimStart('v', 'V'), @"^\d+(\.\d+){0,3}");
+            if (!match.Success) return null;
+
+            var parts = match.Value.Split('.');
+            var numbers = new int[4];
+            for (var i = 0; i < 4; i++)
+                numbers[i] = i < parts.Length && int.TryParse(parts[i], out var value) ? value : 0;
+
+            return new Version(numbers[0], numbers[1], numbers[2], numbers[3]);
+        }
+
+        /// <summary>
+        /// Replaces this exe with a newer release and starts it again with the same
+        /// arguments. Returns true when that happened, and the caller should quit.
+        ///
+        /// Anything that goes wrong here is not worth stopping over: the point of the
+        /// program is to launch the game, so every failure falls through to doing that
+        /// with the version already on disk.
+        /// </summary>
+        public async Task<bool> TryUpdateSelfAsync(string[] args, IProgress<Status> progress, CancellationToken ct)
+        {
+            try
+            {
+                Directory.CreateDirectory(DownloadsDir);
+                var exe = SelfPath();
+                TryDelete(exe + ".old");
+
+                var current = CurrentVersion();
+                var release = await FetchReleaseAsync(ct).ConfigureAwait(false);
+                var latest = ParseVersion(release?.Tag);
+                if (latest == null || latest <= current) { ForgetAttempt(current); return false; }
+
+                // A release whose exe reports an older version than its own tag would
+                // otherwise be downloaded again on every single launch, forever.
+                if (latest.ToString() == LastAttempt())
+                {
+                    Log("skipping self-update to " + latest + ": already tried and the version did not change");
+                    return false;
+                }
+
+                var asset = release.Assets?.FirstOrDefault(a =>
+                    string.Equals(a.Name, Config.UpdateAssetName, StringComparison.OrdinalIgnoreCase));
+                if (asset == null || string.IsNullOrEmpty(asset.Url)) return false;
+
+                progress?.Report(new Status("Updating the launcher...", 3));
+
+                var fresh = Path.Combine(DownloadsDir, "EchoBootstrapper.new.exe");
+                await DownloadAsync(asset.Url, fresh, null, ct).ConfigureAwait(false);
+
+                if (!LooksLikeProgram(fresh)) { TryDelete(fresh); return false; }
+
+                RememberAttempt(latest);
+
+                var parked = exe + ".old";
+                File.Move(exe, parked);
+                try
+                {
+                    File.Move(fresh, exe);
+                }
+                catch (Exception)
+                {
+                    File.Move(parked, exe);
+                    throw;
+                }
+
+                Log("updated self " + current + " -> " + latest);
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = exe,
+                    Arguments = string.Join(" ", args.Select(Quote)),
+                    UseShellExecute = false,
+                });
+                return true;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception e)
+            {
+                Log("self-update skipped: " + e.Message);
+                return false;
+            }
+        }
+
+        private async Task<Release> FetchReleaseAsync(CancellationToken ct)
+        {
+            // The launch must not hang on a slow or blocked api; the client download
+            // that follows is the part worth waiting for.
+            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                timeout.CancelAfter(TimeSpan.FromSeconds(10));
+
+                using (var request = new HttpRequestMessage(HttpMethod.Get, Config.ReleasesApiUrl))
+                {
+                    request.Headers.Add("Accept", "application/vnd.github+json");
+                    using (var response = await _http.SendAsync(request, timeout.Token).ConfigureAwait(false))
+                    {
+                        if (!response.IsSuccessStatusCode) return null;
+                        return Deserialize<Release>(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+                    }
+                }
+            }
+        }
+
+        private static bool LooksLikeProgram(string path)
+        {
+            try
+            {
+                var info = new FileInfo(path);
+                if (!info.Exists || info.Length < 64 * 1024) return false;
+
+                using (var file = File.OpenRead(path))
+                    return file.ReadByte() == 'M' && file.ReadByte() == 'Z';
+            }
+            catch { return false; }
+        }
+
+        private static string LastAttempt()
+        {
+            try
+            {
+                return File.Exists(AttemptedUpdateFile) ? File.ReadAllText(AttemptedUpdateFile).Trim() : null;
+            }
+            catch { return null; }
+        }
+
+        private static void RememberAttempt(Version version)
+        {
+            try { File.WriteAllText(AttemptedUpdateFile, version.ToString()); } catch { }
+        }
+
+        private static void ForgetAttempt(Version current)
+        {
+            try
+            {
+                var attempted = ParseVersion(LastAttempt());
+                if (attempted != null && current >= attempted) TryDelete(AttemptedUpdateFile);
+            }
+            catch { }
+        }
 
         public async Task<Manifest> FetchManifestAsync(CancellationToken ct)
         {
