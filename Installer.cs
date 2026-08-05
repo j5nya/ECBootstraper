@@ -120,11 +120,7 @@ namespace EchoBootstrapper
 
                 // A release whose exe reports an older version than its own tag would
                 // otherwise be downloaded again on every single launch, forever.
-                if (latest.ToString() == LastAttempt())
-                {
-                    Log("skipping self-update to " + latest + ": already tried and the version did not change");
-                    return false;
-                }
+                if (latest.ToString() == LastAttempt()) return false;
 
                 var asset = release.Assets?.FirstOrDefault(a =>
                     string.Equals(a.Name, Config.UpdateAssetName, StringComparison.OrdinalIgnoreCase));
@@ -151,7 +147,6 @@ namespace EchoBootstrapper
                     throw;
                 }
 
-                Log("updated self " + current + " -> " + latest);
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = exe,
@@ -161,9 +156,8 @@ namespace EchoBootstrapper
                 return true;
             }
             catch (OperationCanceledException) { throw; }
-            catch (Exception e)
+            catch (Exception)
             {
-                Log("self-update skipped: " + e.Message);
                 return false;
             }
         }
@@ -520,9 +514,6 @@ namespace EchoBootstrapper
             if (!argument.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
 
             var url = ResolveJoinUrl(argument);
-            Log("launch argument: " + argument);
-            Log("resolved url:    " + url);
-
             var parsed = new Uri(url);
             var ticket = ReadQueryValue(parsed.Query, "ticket");
             if (string.IsNullOrEmpty(ticket))
@@ -537,7 +528,6 @@ namespace EchoBootstrapper
                 + " --joinScriptUrl " + Quote(url);
 
             progress?.Report(new Status("Starting the game...", 100));
-            Log("arguments:       " + arguments);
             Process.Start(new ProcessStartInfo
             {
                 FileName = player,
@@ -575,23 +565,9 @@ namespace EchoBootstrapper
 
             if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed) ||
                 (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps))
-            {
-                Log("could not read launch argument: " + argument);
                 throw new Exception("Could not read the join link from the website.");
-            }
 
             return url;
-        }
-
-        internal static void Log(string line)
-        {
-            try
-            {
-                Directory.CreateDirectory(RootDir);
-                File.AppendAllText(Path.Combine(RootDir, "launch.log"),
-                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine);
-            }
-            catch {  }
         }
 
         private static T Deserialize<T>(string json) where T : class
