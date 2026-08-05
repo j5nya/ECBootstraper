@@ -100,7 +100,12 @@ namespace EchoBootstrapper
             progress?.Report(new Status("Finishing up...", 98));
 
             if (options.RegisterProtocol) RegisterProtocol();
-            if (options.DesktopShortcut && installed) CreateDesktopShortcut(PlayerPath());
+
+            if (options.DesktopShortcut && installed)
+            {
+                CreateDesktopShortcut(PlayerPath(), Config.ProductName);
+                CreateDesktopShortcut(StudioPath(), Config.DisplayName + " Studio");
+            }
 
             RemoveLegacyLayout();
 
@@ -319,12 +324,14 @@ namespace EchoBootstrapper
             }
         }
 
-        public static void CreateDesktopShortcut(string targetExe)
+        public static void CreateDesktopShortcut(string targetExe, string name)
         {
             try
             {
+                if (!File.Exists(targetExe)) return;
+
                 var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-                var linkPath = Path.Combine(desktop, Config.ProductName + ".lnk");
+                var linkPath = Path.Combine(desktop, name + ".lnk");
 
                 var shellType = Type.GetTypeFromProgID("WScript.Shell");
                 if (shellType == null) return;
@@ -336,7 +343,7 @@ namespace EchoBootstrapper
                 SetProperty(shortcut, "TargetPath", targetExe);
                 SetProperty(shortcut, "WorkingDirectory", Path.GetDirectoryName(targetExe));
                 SetProperty(shortcut, "IconLocation", targetExe + ",0");
-                SetProperty(shortcut, "Description", Config.ProductName);
+                SetProperty(shortcut, "Description", name);
                 Invoke(shortcut, "Save");
             }
             catch {  }
