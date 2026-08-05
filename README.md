@@ -1,6 +1,7 @@
 # Echocore Bootstrapper
 
 The source is open so anyone can see what the bootstrapper does before running it.
+[How it works](HOW-IT-WORKS.md) · [Changelog](CHANGELOG.md)
 
 ## Requirements
 
