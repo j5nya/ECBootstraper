@@ -121,10 +121,7 @@ namespace EchoBootstrapper
                     if (!string.IsNullOrEmpty(step.Text)) _status.Text = step.Text;
                 });
 
-                // Checked first, opened first: the player gets the download page in front
-                // of them while the game is still being set up, rather than after it.
                 var outdated = await _installer.IsOutdatedAsync(_cancel.Token).ConfigureAwait(true);
-                if (outdated) Installer.OpenDownloadPage();
 
                 var manifest = await _installer.FetchManifestAsync(_cancel.Token).ConfigureAwait(true);
 
@@ -141,10 +138,14 @@ namespace EchoBootstrapper
 
                 if (outdated)
                 {
-                    // The game is already starting; this only has to be read, so the
-                    // window stays up with the message instead of closing itself.
-                    _status.Text = "A newer launcher is out - please download it again from the site.";
+                    // Message first, page second. Opening the browser straight away puts
+                    // a window over this one before the line can be read, and then the
+                    // player has no idea why the site turned up.
+                    _status.Text = "A newer launcher is out - opening the download page...";
                     _bar.Freeze();
+                    await Task.Delay(3000, _cancel.Token).ConfigureAwait(true);
+                    Installer.OpenDownloadPage();
+                    _status.Text = "A newer launcher is out - please download it again from the site.";
                     return;
                 }
 
