@@ -14,7 +14,7 @@ namespace EchoBootstrapper
 
         public const string PlayerExecutable = "EchoCorePlayerBt.exe";
 
-        public const string StudioExecutable = "RobloxStudioBeta.exe";
+        public const string StudioExecutable = "EchoCoreStudioBt.exe";
 
         public const string ProtocolScheme = "echo-player";
 

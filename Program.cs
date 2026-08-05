@@ -15,13 +15,9 @@ namespace EchoBootstrapper
             var protocolArgument = args.FirstOrDefault(a =>
                 a.StartsWith(Config.ProtocolScheme + ":", StringComparison.OrdinalIgnoreCase));
 
-            var wantStudio = args.Any(a =>
-                a.Equals("--studio", StringComparison.OrdinalIgnoreCase) ||
-                a.Equals("/studio", StringComparison.OrdinalIgnoreCase));
-
             var preview = args.Any(a => a.Equals("--preview", StringComparison.OrdinalIgnoreCase));
 
-            Application.Run(new MainForm(protocolArgument, wantStudio) { Preview = preview });
+            Application.Run(new MainForm(protocolArgument) { Preview = preview });
         }
     }
 }

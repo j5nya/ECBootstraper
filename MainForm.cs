@@ -16,7 +16,6 @@ namespace EchoBootstrapper
         private const int SideMargin = 52;
 
         private readonly string _protocolArgument;
-        private readonly bool _wantStudio;
         private readonly bool _launchMode;
 
         private readonly Installer _installer = new Installer();
@@ -29,10 +28,9 @@ namespace EchoBootstrapper
 
         public bool Preview { get; set; }
 
-        public MainForm(string protocolArgument, bool wantStudio)
+        public MainForm(string protocolArgument)
         {
             _protocolArgument = protocolArgument;
-            _wantStudio = wantStudio;
             _launchMode = !string.IsNullOrEmpty(protocolArgument);
             BuildUi();
         }
@@ -122,12 +120,16 @@ namespace EchoBootstrapper
 
                 var options = new InstallOptions
                 {
-                    Studio = _wantStudio,
                     DesktopShortcut = true,
                     RegisterProtocol = true,
                 };
 
-                await _installer.InstallAsync(manifest, options, null, _cancel.Token).ConfigureAwait(true);
+                var progress = new Progress<Status>(step =>
+                {
+                    if (!string.IsNullOrEmpty(step.Text)) _status.Text = step.Text;
+                });
+
+                await _installer.InstallAsync(manifest, options, progress, _cancel.Token).ConfigureAwait(true);
 
                 if (_launchMode)
                     _installer.LaunchFromProtocol(_protocolArgument, null);

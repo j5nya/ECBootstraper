@@ -18,7 +18,6 @@ namespace EchoBootstrapper
 {
     internal class InstallOptions
     {
-        public bool Studio;
         public bool DesktopShortcut;
         public bool RegisterProtocol = true;
     }
@@ -96,8 +95,7 @@ namespace EchoBootstrapper
                 installed = true;
             }
 
-            if (options.Studio || Directory.Exists(StudioDir))
-                installed |= await InstallStudioAsync(progress, ct).ConfigureAwait(false);
+            installed |= await InstallStudioAsync(progress, ct).ConfigureAwait(false);
 
             progress?.Report(new Status("Finishing up...", 98));
 
