@@ -20,7 +20,7 @@ namespace EchoBootstrapper
 
         public const string ReleasesApiUrl = "https://api.github.com/repos/j5nya/ECBootstraper/releases/latest";
 
-        public const string UpdateAssetName = "EchoBootstrapper.exe";
+        public const string DownloadPageUrl = "https://echocore.xyz/download";
 
         public const int ParallelDownloads = 3;
     }

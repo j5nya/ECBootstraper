@@ -15,7 +15,6 @@ namespace EchoBootstrapper
         private const int LogoSize = 96;
         private const int SideMargin = 52;
 
-        private readonly string[] _args;
         private readonly string _protocolArgument;
         private readonly bool _launchMode;
 
@@ -29,9 +28,8 @@ namespace EchoBootstrapper
 
         public bool Preview { get; set; }
 
-        public MainForm(string[] args, string protocolArgument)
+        public MainForm(string protocolArgument)
         {
-            _args = args ?? new string[0];
             _protocolArgument = protocolArgument;
             _launchMode = !string.IsNullOrEmpty(protocolArgument);
             BuildUi();
@@ -123,14 +121,10 @@ namespace EchoBootstrapper
                     if (!string.IsNullOrEmpty(step.Text)) _status.Text = step.Text;
                 });
 
-                // Before anything else, in case a newer launcher is what fixes whatever
-                // the current one gets wrong. If it replaces itself it starts again with
-                // the same arguments, so this copy has nothing left to do.
-                if (await _installer.TryUpdateSelfAsync(_args, progress, _cancel.Token).ConfigureAwait(true))
-                {
-                    Close();
-                    return;
-                }
+                // Checked first, opened first: the player gets the download page in front
+                // of them while the game is still being set up, rather than after it.
+                var outdated = await _installer.IsOutdatedAsync(_cancel.Token).ConfigureAwait(true);
+                if (outdated) Installer.OpenDownloadPage();
 
                 var manifest = await _installer.FetchManifestAsync(_cancel.Token).ConfigureAwait(true);
 
@@ -144,6 +138,15 @@ namespace EchoBootstrapper
 
                 if (_launchMode)
                     _installer.LaunchFromProtocol(_protocolArgument, null);
+
+                if (outdated)
+                {
+                    // The game is already starting; this only has to be read, so the
+                    // window stays up with the message instead of closing itself.
+                    _status.Text = "A newer launcher is out - please download it again from the site.";
+                    _bar.Freeze();
+                    return;
+                }
 
                 await Task.Delay(_launchMode ? 1200 : 2000, _cancel.Token).ConfigureAwait(true);
                 Close();

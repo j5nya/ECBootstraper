@@ -17,7 +17,7 @@ namespace EchoBootstrapper
 
             var preview = args.Any(a => a.Equals("--preview", StringComparison.OrdinalIgnoreCase));
 
-            Application.Run(new MainForm(args, protocolArgument) { Preview = preview });
+            Application.Run(new MainForm(protocolArgument) { Preview = preview });
         }
     }
 }

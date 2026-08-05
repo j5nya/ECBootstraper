@@ -69,10 +69,6 @@ namespace EchoBootstrapper
         public static bool IsClientCurrent(string version) =>
             InstalledVersion(ClientDir) == version && File.Exists(PlayerPath());
 
-        private static string SelfPath() => Process.GetCurrentProcess().MainModule.FileName;
-
-        private static string AttemptedUpdateFile => Path.Combine(DownloadsDir, "selfupdate.txt");
-
         private static Version CurrentVersion()
         {
             return Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0);
@@ -98,68 +94,43 @@ namespace EchoBootstrapper
         }
 
         /// <summary>
-        /// Replaces this exe with a newer release and starts it again with the same
-        /// arguments. Returns true when that happened, and the caller should quit.
+        /// True when the newest release is newer than this build.
         ///
-        /// Anything that goes wrong here is not worth stopping over: the point of the
-        /// program is to launch the game, so every failure falls through to doing that
-        /// with the version already on disk.
+        /// The launcher deliberately does not update itself. Downloading a program and
+        /// running it in place of the running one is exactly the shape of a dropper, and
+        /// Windows Defender read it that way - an unsigned build with no reputation was
+        /// quarantined as Trojan:Win32/SuspExecRep.A!cl on sight. So it only looks, and
+        /// asks the player to fetch the new one from the site.
+        ///
+        /// A failed check is never worth stopping over: the point of the program is to
+        /// launch the game, so anything that goes wrong here answers "not outdated".
         /// </summary>
-        public async Task<bool> TryUpdateSelfAsync(string[] args, IProgress<Status> progress, CancellationToken ct)
+        public async Task<bool> IsOutdatedAsync(CancellationToken ct)
         {
             try
             {
-                Directory.CreateDirectory(DownloadsDir);
-                var exe = SelfPath();
-                TryDelete(exe + ".old");
-
-                var current = CurrentVersion();
                 var release = await FetchReleaseAsync(ct).ConfigureAwait(false);
                 var latest = ParseVersion(release?.Tag);
-                if (latest == null || latest <= current) { ForgetAttempt(current); return false; }
-
-                // A release whose exe reports an older version than its own tag would
-                // otherwise be downloaded again on every single launch, forever.
-                if (latest.ToString() == LastAttempt()) return false;
-
-                var asset = release.Assets?.FirstOrDefault(a =>
-                    string.Equals(a.Name, Config.UpdateAssetName, StringComparison.OrdinalIgnoreCase));
-                if (asset == null || string.IsNullOrEmpty(asset.Url)) return false;
-
-                progress?.Report(new Status("Updating the launcher...", 3));
-
-                var fresh = Path.Combine(DownloadsDir, "EchoBootstrapper.new.exe");
-                await DownloadAsync(asset.Url, fresh, null, ct).ConfigureAwait(false);
-
-                if (!LooksLikeProgram(fresh)) { TryDelete(fresh); return false; }
-
-                RememberAttempt(latest);
-
-                var parked = exe + ".old";
-                File.Move(exe, parked);
-                try
-                {
-                    File.Move(fresh, exe);
-                }
-                catch (Exception)
-                {
-                    File.Move(parked, exe);
-                    throw;
-                }
-
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = exe,
-                    Arguments = string.Join(" ", args.Select(Quote)),
-                    UseShellExecute = false,
-                });
-                return true;
+                return latest != null && latest > CurrentVersion();
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception)
             {
                 return false;
             }
+        }
+
+        public static void OpenDownloadPage()
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = Config.DownloadPageUrl,
+                    UseShellExecute = true,
+                });
+            }
+            catch (Exception) {  }
         }
 
         private async Task<Release> FetchReleaseAsync(CancellationToken ct)
@@ -180,43 +151,6 @@ namespace EchoBootstrapper
                     }
                 }
             }
-        }
-
-        private static bool LooksLikeProgram(string path)
-        {
-            try
-            {
-                var info = new FileInfo(path);
-                if (!info.Exists || info.Length < 64 * 1024) return false;
-
-                using (var file = File.OpenRead(path))
-                    return file.ReadByte() == 'M' && file.ReadByte() == 'Z';
-            }
-            catch { return false; }
-        }
-
-        private static string LastAttempt()
-        {
-            try
-            {
-                return File.Exists(AttemptedUpdateFile) ? File.ReadAllText(AttemptedUpdateFile).Trim() : null;
-            }
-            catch { return null; }
-        }
-
-        private static void RememberAttempt(Version version)
-        {
-            try { File.WriteAllText(AttemptedUpdateFile, version.ToString()); } catch { }
-        }
-
-        private static void ForgetAttempt(Version current)
-        {
-            try
-            {
-                var attempted = ParseVersion(LastAttempt());
-                if (attempted != null && current >= attempted) TryDelete(AttemptedUpdateFile);
-            }
-            catch { }
         }
 
         public async Task<Manifest> FetchManifestAsync(CancellationToken ct)
