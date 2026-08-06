@@ -13,7 +13,8 @@ namespace EchoBootstrapper
             Application.SetCompatibleTextRenderingDefault(false);
 
             var protocolArgument = args.FirstOrDefault(a =>
-                a.StartsWith(Config.ProtocolScheme + ":", StringComparison.OrdinalIgnoreCase));
+                a.StartsWith(Config.ProtocolScheme + ":", StringComparison.OrdinalIgnoreCase) ||
+                a.StartsWith(Config.StudioProtocolScheme + ":", StringComparison.OrdinalIgnoreCase));
 
             var preview = args.Any(a => a.Equals("--preview", StringComparison.OrdinalIgnoreCase));
 

@@ -18,6 +18,10 @@ namespace EchoBootstrapper
 
         public const string ProtocolScheme = "echo-player";
 
+        // The website's "Edit in Studio" button opens echo-studio://<edit url>. Nothing
+        // claimed that scheme before, so the click silently did nothing after an install.
+        public const string StudioProtocolScheme = "echo-studio";
+
         public const string ReleasesApiUrl = "https://api.github.com/repos/j5nya/ECBootstraper/releases/latest";
 
         public const string DownloadPageUrl = "https://echocore.xyz/download";

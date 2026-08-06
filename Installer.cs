@@ -400,9 +400,15 @@ namespace EchoBootstrapper
         public static void RegisterProtocol()
         {
             var exe = Process.GetCurrentProcess().MainModule.FileName;
-            using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Classes\" + Config.ProtocolScheme))
+            RegisterScheme(Config.ProtocolScheme, Config.ProductName + " Protocol", exe);
+            RegisterScheme(Config.StudioProtocolScheme, Config.DisplayName + " Studio Protocol", exe);
+        }
+
+        private static void RegisterScheme(string scheme, string description, string exe)
+        {
+            using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Classes\" + scheme))
             {
-                key.SetValue("", "URL:" + Config.ProductName + " Protocol");
+                key.SetValue("", "URL:" + description);
                 key.SetValue("URL Protocol", "");
                 using (var icon = key.CreateSubKey("DefaultIcon")) icon.SetValue("", exe + ",1");
                 using (var cmd = key.CreateSubKey(@"shell\open\command")) cmd.SetValue("", "\"" + exe + "\" \"%1\"");
@@ -444,6 +450,9 @@ namespace EchoBootstrapper
         {
             if (string.IsNullOrEmpty(argument)) return false;
 
+            if (argument.StartsWith(Config.StudioProtocolScheme + ":", StringComparison.OrdinalIgnoreCase))
+                return LaunchStudio(argument, progress);
+
             var prefix = Config.ProtocolScheme + ":";
             if (!argument.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
 
@@ -472,6 +481,36 @@ namespace EchoBootstrapper
             return true;
         }
 
+        private bool LaunchStudio(string argument, IProgress<Status> progress)
+        {
+            var url = ResolveUrl(argument, Config.StudioProtocolScheme);
+            var parsed = new Uri(url);
+
+            // The edit link carries the place through PlaceID; universeId is optional and
+            // Studio is happy with 0 when the site did not supply one.
+            var placeId = ReadQueryValue(parsed.Query, "PlaceID") ?? "0";
+            var universeId = ReadQueryValue(parsed.Query, "universeId") ?? "0";
+
+            var studio = StudioPath();
+            if (!File.Exists(studio))
+                throw new Exception("Studio is missing from the install. Run the installer again.");
+
+            var arguments = "-ide -task EditPlace"
+                + " -placeId " + placeId
+                + " -universeId " + universeId
+                + " -script " + Quote(url);
+
+            progress?.Report(new Status("Starting Studio...", 100));
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = studio,
+                Arguments = arguments,
+                WorkingDirectory = Path.GetDirectoryName(studio),
+                UseShellExecute = false,
+            });
+            return true;
+        }
+
         private static string Quote(string value) => "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\"";
 
         private static string ReadQueryValue(string query, string key)
@@ -487,9 +526,12 @@ namespace EchoBootstrapper
             return null;
         }
 
-        internal static string ResolveJoinUrl(string argument)
+        internal static string ResolveJoinUrl(string argument) =>
+            ResolveUrl(argument, Config.ProtocolScheme);
+
+        internal static string ResolveUrl(string argument, string scheme)
         {
-            var prefix = Config.ProtocolScheme + ":";
+            var prefix = scheme + ":";
             var url = argument.Substring(prefix.Length).TrimStart('/');
 
             if (Regex.IsMatch(url, "^https?%3A", RegexOptions.IgnoreCase))
