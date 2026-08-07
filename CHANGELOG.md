@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.9
+
+- **A place can now run on the 2021 client, and the launcher picks which one to
+  open.** The website puts the place's client version in the launch link; the
+  launcher reads it and starts the matching player. A link without it - which is
+  every link made before this - means the 2016 client, so nothing about an
+  existing install changes.
+- The 2021 client is kept in its own folder (`client2021`) with its own manifest,
+  and is only downloaded the first time somebody joins a place that needs it.
+  Nobody pays for a second client they never open, and the 2016 client's update,
+  which replaces its whole folder, cannot take it with it.
+- If the server has not published the 2021 client yet, the launcher says exactly
+  that instead of reporting a manifest it could not read - the player has nothing
+  to fix on their end and should not be sent looking.
+
 ## 1.0.8
 
 - The "you are out of date" message is shown for three seconds before the

@@ -13,7 +13,7 @@
     <Company>Echocore</Company>
     <Description>Installs and updates the Echocore client, and launches games from the site.</Description>
     <Copyright>Copyright (c) 2026 Echocore</Copyright>
-    <Version>1.0.8</Version>
+    <Version>1.0.9</Version>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <GenerateDependencyFile>false</GenerateDependencyFile>
   </PropertyGroup>

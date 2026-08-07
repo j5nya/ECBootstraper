@@ -46,6 +46,10 @@ namespace EchoBootstrapper
 
         public static string ClientDir => Path.Combine(RootDir, "client");
 
+        // Deliberately a sibling of ClientDir, never inside it: the 2016 installer
+        // replaces its whole folder on every update, which would take this with it.
+        public static string Client2021Dir => Path.Combine(RootDir, "client2021");
+
         public static string StudioDir => Path.Combine(RootDir, "studio");
 
         public static string DownloadsDir => Path.Combine(RootDir, "Downloads");
@@ -64,10 +68,15 @@ namespace EchoBootstrapper
 
         public static string PlayerPath() => Path.Combine(ClientDir, Config.PlayerExecutable);
 
+        public static string Player2021Path() => Path.Combine(Client2021Dir, Config.PlayerExecutable);
+
         public static string StudioPath() => Path.Combine(StudioDir, Config.StudioExecutable);
 
         public static bool IsClientCurrent(string version) =>
             InstalledVersion(ClientDir) == version && File.Exists(PlayerPath());
+
+        public static bool Is2021ClientCurrent(string version) =>
+            InstalledVersion(Client2021Dir) == version && File.Exists(Player2021Path());
 
         private static Version CurrentVersion()
         {
@@ -153,9 +162,12 @@ namespace EchoBootstrapper
             }
         }
 
-        public async Task<Manifest> FetchManifestAsync(CancellationToken ct)
+        public Task<Manifest> FetchManifestAsync(CancellationToken ct) =>
+            FetchManifestAsync(Config.ManifestUrl, ct);
+
+        public async Task<Manifest> FetchManifestAsync(string manifestUrl, CancellationToken ct)
         {
-            var json = await _http.GetStringAsync(Config.ManifestUrl).ConfigureAwait(false);
+            var json = await _http.GetStringAsync(manifestUrl).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
             var manifest = Deserialize<Manifest>(json);
 
@@ -176,7 +188,7 @@ namespace EchoBootstrapper
 
             if (!IsClientCurrent(manifest.Version))
             {
-                await InstallClientAsync(manifest, progress, ct).ConfigureAwait(false);
+                await InstallClientAsync(manifest, ClientDir, progress, ct).ConfigureAwait(false);
                 installed = true;
             }
 
@@ -197,7 +209,8 @@ namespace EchoBootstrapper
             progress?.Report(new Status("Ready.", 100));
         }
 
-        private async Task InstallClientAsync(Manifest manifest, IProgress<Status> progress, CancellationToken ct)
+        private async Task InstallClientAsync(Manifest manifest, string targetDir,
+            IProgress<Status> progress, CancellationToken ct)
         {
             long totalBytes = manifest.Packages.Sum(p => p.Size);
             long doneBytes = 0;
@@ -255,7 +268,7 @@ namespace EchoBootstrapper
 
             await Task.WhenAll(workers).ConfigureAwait(false);
 
-            var staging = ClientDir + ".new";
+            var staging = targetDir + ".new";
             ReplaceFolder(staging);
 
             foreach (var package in manifest.Packages)
@@ -267,8 +280,8 @@ namespace EchoBootstrapper
 
             File.WriteAllText(VersionFile(staging), manifest.Version);
 
-            DeleteFolder(ClientDir);
-            Directory.Move(staging, ClientDir);
+            DeleteFolder(targetDir);
+            Directory.Move(staging, targetDir);
         }
 
         private async Task<bool> InstallStudioAsync(IProgress<Status> progress, CancellationToken ct)
@@ -446,7 +459,50 @@ namespace EchoBootstrapper
         private static void SetProperty(object target, string property, object value) =>
             target.GetType().InvokeMember(property, System.Reflection.BindingFlags.SetProperty, null, target, new[] { value });
 
-        public bool LaunchFromProtocol(string argument, IProgress<Status> progress)
+        /// <summary>
+        /// Returns the player to start for a place published on <paramref name="era"/>, fetching
+        /// the 2021 client first if this is the first 2021 place the user has joined.
+        /// </summary>
+        private async Task<string> EnsurePlayerForEraAsync(string era, IProgress<Status> progress,
+            CancellationToken ct)
+        {
+            if (!string.Equals(era, "2021", StringComparison.OrdinalIgnoreCase))
+            {
+                var player = PlayerPath();
+                if (!File.Exists(player))
+                    throw new Exception("The player is missing from the install. Run the installer again.");
+                return player;
+            }
+
+            Manifest manifest;
+            try
+            {
+                manifest = await FetchManifestAsync(Config.Manifest2021Url, ct).ConfigureAwait(false);
+            }
+            catch (Exception error)
+            {
+                // Worth naming explicitly. A 404 here means the server has not published the
+                // 2021 client yet, which is not something the player can do anything about,
+                // and "could not read the manifest" would send them hunting for a local fault.
+                throw new Exception("This game runs on the 2021 client, which this server has not "
+                                    + "published yet. (" + error.Message + ")");
+            }
+
+            if (!Is2021ClientCurrent(manifest.Version))
+            {
+                progress?.Report(new Status("Getting the 2021 client...", 0));
+                Directory.CreateDirectory(DownloadsDir);
+                await InstallClientAsync(manifest, Client2021Dir, progress, ct).ConfigureAwait(false);
+            }
+
+            var player2021 = Player2021Path();
+            if (!File.Exists(player2021))
+                throw new Exception("The 2021 client installed but its player is missing.");
+            return player2021;
+        }
+
+        public async Task<bool> LaunchFromProtocolAsync(string argument, IProgress<Status> progress,
+            CancellationToken ct)
         {
             if (string.IsNullOrEmpty(argument)) return false;
 
@@ -462,8 +518,11 @@ namespace EchoBootstrapper
             if (string.IsNullOrEmpty(ticket))
                 throw new Exception("The join link carries no ticket, so the game could not log in.");
 
-            var player = PlayerPath();
-            if (!File.Exists(player)) throw new Exception("The player is missing from the install. Run the installer again.");
+            // The website puts the place's client era in the launch url. Anything other than
+            // 2021 - including it being absent, which is every link minted before this existed -
+            // means the 2016 client, so old links keep working unchanged.
+            var era = ReadQueryValue(parsed.Query, "era");
+            var player = await EnsurePlayerForEraAsync(era, progress, ct).ConfigureAwait(false);
 
             var arguments =
                 "--authenticationUrl " + Quote(parsed.Scheme + "://" + parsed.Authority + "/Login/Negotiate.ashx")

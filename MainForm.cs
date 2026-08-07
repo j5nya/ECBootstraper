@@ -134,7 +134,8 @@ namespace EchoBootstrapper
                 await _installer.InstallAsync(manifest, options, progress, _cancel.Token).ConfigureAwait(true);
 
                 if (_launchMode)
-                    _installer.LaunchFromProtocol(_protocolArgument, null);
+                    await _installer.LaunchFromProtocolAsync(_protocolArgument, progress, _cancel.Token)
+                        .ConfigureAwait(true);
 
                 if (outdated)
                 {

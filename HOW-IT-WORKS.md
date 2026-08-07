@@ -32,9 +32,13 @@ lets the website start a game, and it tells you when it is itself out of date.
 ```
 %LOCALAPPDATA%\Echocore\
     client\     the player, plus .version - the manifest version it came from
+    client2021\ the 2021 player, same layout, fetched on demand (see below)
     studio\     Studio, plus .version - the ETag of studio.zip
     Downloads\  verified package archives, reused between updates
 ```
+
+`client2021` is a sibling of `client`, not a folder inside it, because a client
+update deletes and replaces its whole folder.
 
 ## Starting a game
 
@@ -53,6 +57,19 @@ started with the three arguments it expects:
 --authenticationTicket "<ticket>"
 --joinScriptUrl "<the whole link>"
 ```
+
+### Which client
+
+Each place is published for one client version, and the site puts it in the link
+as `&era=2016` or `&era=2021`. `2021` starts the player in `client2021`,
+downloading it from `manifest-2021.json` first if this is the first 2021 place
+the user has joined. Anything else - including the parameter being absent, which
+is every link made before this existed - starts the usual client.
+
+The launcher only decides *which player to open*. `placelauncher.ashx` re-reads
+the era from the place itself and ignores what the link claimed, so editing the
+parameter by hand changes nothing except which client the person editing it ends
+up running.
 
 ## What it deliberately does not do
 

@@ -12,6 +12,11 @@ namespace EchoBootstrapper
 
         public const string StudioUrl = "https://echocore.xyz/client/studio.zip";
 
+        // A place can be published for the 2021 client instead of the 2016 one. That
+        // client is a separate build with its own packages, so it gets its own manifest
+        // and its own folder rather than overwriting the one everybody already has.
+        public const string Manifest2021Url = "https://echocore.xyz/client/manifest-2021.json";
+
         public const string PlayerExecutable = "EchoCorePlayerBt.exe";
 
         public const string StudioExecutable = "EchoCoreStudioBt.exe";
