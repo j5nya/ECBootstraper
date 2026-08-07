@@ -134,8 +134,26 @@ namespace EchoBootstrapper
                 await _installer.InstallAsync(manifest, options, progress, _cancel.Token).ConfigureAwait(true);
 
                 if (_launchMode)
+                {
                     await _installer.LaunchFromProtocolAsync(_protocolArgument, progress, _cancel.Token)
                         .ConfigureAwait(true);
+
+                    // The player's window says "Roblox" because that caption lives in the packed
+                    // client and cannot be patched. Rename it from here instead: hide this window
+                    // and hold the caption to EchoCore until the game closes, then exit. Only when
+                    // a player was actually started (the studio path leaves LastPlayer null).
+                    var player = _installer.LastPlayer;
+                    if (player != null)
+                    {
+                        Visible = false;
+                        ShowInTaskbar = false;
+                        var token = _cancel.Token;
+                        await Task.Run(() => TitleKeeper.Run(player, Config.DisplayName, token), token)
+                            .ConfigureAwait(true);
+                        Close();
+                        return;
+                    }
+                }
 
                 if (outdated)
                 {

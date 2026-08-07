@@ -530,7 +530,9 @@ namespace EchoBootstrapper
                 + " --joinScriptUrl " + Quote(url);
 
             progress?.Report(new Status("Starting the game...", 100));
-            Process.Start(new ProcessStartInfo
+            // Kept so the caller can rename the window once it appears - the caption is baked
+            // into the packed client and cannot be patched, so it is fixed from the outside.
+            LastPlayer = Process.Start(new ProcessStartInfo
             {
                 FileName = player,
                 Arguments = arguments,
@@ -539,6 +541,9 @@ namespace EchoBootstrapper
             });
             return true;
         }
+
+        /// <summary>The player process the last protocol launch started, if any.</summary>
+        public Process LastPlayer { get; private set; }
 
         private bool LaunchStudio(string argument, IProgress<Status> progress)
         {

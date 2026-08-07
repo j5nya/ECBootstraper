@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0
+
+- **The player window now says EchoCore, not Roblox.** That caption is produced by the
+  packed client at runtime - there is no string in the file to patch - so the launcher
+  renames the window from outside once it appears, and holds the name for as long as the
+  game runs (the caption is set again when the 3D window opens a few seconds in). The
+  launcher stays resident, hidden, for the session to do this and exits when the game closes.
+
 ## 1.0.9
 
 - **A place can now run on the 2021 client, and the launcher picks which one to
